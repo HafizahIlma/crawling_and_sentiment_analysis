@@ -1,0 +1,249 @@
+---
+title: "Crawling Data from Twitter and Text Mining"
+author: "Hafizah Ilma"
+date: "10/28/2019"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    df_print: paged
+    number_section: true
+    highlight: espresso
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+In this section, we will discuss how to extract data from Twitter using the API. The extracted data are Twitter netizens comments about **"#IbuKotaBaru"**.
+
+# Libraries
+
+```{r message=FALSE}
+library(tm)
+library(wordcloud2)
+library(twitteR)
+library(rtweet)
+library(dplyr)
+library(textclean)
+library(katadasaR)
+library(tokenizers)
+library(wordcloud)
+library(stringr)
+```
+
+# Data Extraction
+
+## Token and Key Secret of API
+
+The first is to make an API account, then Enter the token and key from our own API
+
+```{r}
+# consumer_key <- "XXXXXXXXXXXXXXXXXXXXXXXXX"
+# consumer_secret <- "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+# access_token <- "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+# access_secret <- "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+```
+
+The steps below are the process of extracting Twitter with keyword #IbuKotaBaru and retrieving 10000 data. 
+However, only 1617 data are available.
+
+```{r}
+# setup_twitter_oauth(consumer_key, consumer_secret, access_token, access_secret)
+# tw = searchTwitter('#IbuKotaBaru',
+#                    n = 10000,
+#                    retryOnRateLimit = 1617)
+```
+
+Saving data extraction results to RDS
+```{r}
+# saveRDS(tw,file = 'C:\\Users\\teama\\Desktop\\HAFIZAHILMA\\ibukota2-mentah.rds')
+
+# tw <-readRDS('ibukota2-mentah.rds')
+# d = twListToDF(tw)
+```
+
+Convert to Data Frame 
+```{r}
+# kota_df <- do.call(rbind, lapply(tw, as.data.frame))
+```
+
+Save data to .csv
+```{r}
+# write.csv(kota_df, "data_input/kota_df2.csv")
+# class(kota_df) %>% 
+```
+
+## Read Data
+
+```{r}
+# kota2 <- read.csv("data_input/kota_df2.csv")
+# dim(kota2)
+# class(kota2)
+# kota2 <- kota2$text %>% 
+#   as.character()
+```
+
+## Cleaning html or url with blank
+```{r}
+# kota2 <- kota2 %>% 
+#   replace_html() %>% # replace html with blank 
+#   replace_url()   # replace URLs with blank
+# kota2[1]
+```
+
+## Replace Emoji and html to (.)
+```{r}
+# kota2 <- kota2 %>% 
+#     replace_emoji(.) %>% 
+#     replace_html(.)
+```
+
+## Remove Mentions and Hastags
+
+```{r}
+# kota2 <- kota2 %>% 
+#   replace_tag(kota2, pattern = "@([A-Za-z0-9_]+)",replacement="") %>%  # remove mentions
+#   replace_hash(kota2, pattern = "#([A-Za-z0-9_]+)",replacement="")      # remove hashtags
+```
+
+## Replace slang word to formal word in Bahasa
+
+I downloaded the slang lexicon from link :  https://github.com/nasalsabila/kamus-alay/blob/master/colloquial-indonesian-lexicon.csv
+
+```{r}
+# import Indonesian lexicon
+# spell.lex <- read.csv("kamus-alay-master/kamus-alay-master/colloquial-indonesian-lexicon.csv")
+
+# replace internet slang
+# kota2 <- replace_internet_slang(kota2, slang = paste0("\\b",
+#                                                         spell.lex$slang, "\\b"),
+#                                  replacement = spell.lex$formal, ignore.case = TRUE)
+```
+
+Minimize all letters and delete white space and delete all dots symbol (.)
+
+```{r}
+# kota2 <- strip(kota2)
+# kota2[1:10]
+```
+ 
+## Remove the duplicate sentences
+So the row from 1334 to 337  row
+```{r}
+# kota2 <- kota2 %>% 
+#   as.data.frame() %>% 
+#   distinct()
+# write.csv(kota2, "data_input/kota2clean.csv")
+```
+
+```{r}
+kota <- read.csv("data_input/data_input/kota2clean.csv") 
+head(kota)
+```
+
+# Tokenizing, and Word Cloud creation
+
+## Bahasa Indonesia Text Stemming (Removing affixes in Indonesian)
+
+Stemming refers to the process of reducing inflected (or sometimes derived) words to their word stem, base or root form-generally a written word form. For example, “writing”,“writer”, all reduce to the stem “write.” Or, for example in Bahasa Indonesia it will be “membenarkan”,“pembenaran”, which all has benar as the root word
+
+In order to reduce the vocabulary and focus more on the sense or sentiment of our Twitter data, it is also essential to remove those affixes. katadasaR provides a function to retrieve word stem (a.k.a. word-stemming) for Bahasa Indonesia using Nazief and Andriani’s algorithm. It consists of a set of features to remove prefixes, suffixes or both, but still unable for infixes removal.
+
+
+```{r}
+katadasaR("keberanian")
+```
+
+```{r}
+kota <- as.character(kota$text)
+# before stemming
+kota[1:3]
+```
+
+```{r}
+# stemming <- function(x){
+#   paste(lapply(x,katadasar),collapse = " ")}
+# 
+# kota <- lapply(tokenize_words(kota[]), stemming)
+# 
+# after stemming
+# kota[1:10]
+```
+
+```{r}
+# write.csv(kota, "data_input/kota-sentences.csv")
+# write.csv(kota3, "data_input/kota-word.csv")
+```
+
+## Do stemming on sentence data
+
+```{r}
+# text <- as.character(kota$text)
+# before stemming
+# text[29]
+```
+
+```{r}
+kota_clean <- read.csv("data_input/data_input/kota_clean.csv")
+```
+
+## Read a dictionary of positive words and negative words
+
+The next process is to read the lexicon of positive and negative words. The goal is to match each negative and positive word with each sentence that was cleared earlier.
+
+```{r}
+opinion.lexicon.pos = scan("lexicon and stopword/lexicon and stopword/s-pos.txt", what = "character", comment.char = ";")
+opinion.lexicon.neg = scan("lexicon and stopword/lexicon and stopword/s-neg.txt", what = "character", comment.char = ";")
+```
+
+```{r}
+head(opinion.lexicon.pos)
+head(opinion.lexicon.neg)
+```
+
+## How to add Positive or Negative Vocabulary in The Dictionary?
+
+```{r}
+pos.words = c(opinion.lexicon.pos, "keren")
+neg.words = c(opinion.lexicon.neg, "gak")
+
+```
+
+## The Function of Scoring each Word (Negative or Positive)
+
+The function below is to match every positive or negative word in the lexicon if positive will be given a score of 1, but if negative it will be given a score of -1, then it will be accumulated. So if the final score is minus then the sentence is a negative sentiment, in another word, if the value is positive then the sentence is the positive sentiment.
+ 
+```{r}
+# getSentimentScore = function(sentences, pos.words, neg.words, .progress = "none")
+# {
+# require(plyr)
+# require(stringr)
+# scores = laply(sentences, function(sentence, pos.words, neg.words) {
+# sentence = gsub("[[:cntrl:]]", "", gsub("[[:punct:]]", "", gsub("\\d+", "", sentence)))
+# sentence = tolower(sentence)
+# words = unlist(str_split(sentence, "\\s+"))
+# pos.matches = !is.na(match(words, pos.words))
+# neg.matches = !is.na(match(words, neg.words))
+# score = sum(pos.matches) - sum(neg.matches)
+# return(score)
+# }, pos.words, neg.words, .progress=.progress)
+# return(data.frame(text = sentences, score = scores))
+# }
+```
+
+```{r}
+# kota_score = getSentimentScore(kota_clean$text, opinion.lexicon.pos, opinion.lexicon.neg)
+# kota_score <- ifelse(kota_score$score<0,"negative", "positive")
+# write.csv(gojekResult, file = "kota_score.csv")
+```
+
+```{r}
+kota_score <- read.csv("data_input/data_input/kota_score.csv")
+```
+
+
+```{r}
+# str(kota_score)
+# write.csv(kota_score, "data_input/kota_score22.csv")
+```

@@ -1,0 +1,154 @@
+---
+title: "Text Mining Analysis"
+author: "Hafizah Ilma"
+date: "10/28/2019"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    df_print: paged
+    number_section: true
+    highlight: espresso
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+In this analysis, there will be an analysis of **Indonesian sentiments towards the public opinion about "Moving the Indonesian New Capital City**. Data were taken using the Twitter API scraping technique with the keyword **"#IbuKotaBaru"**. The data used is clean, which does not contain punctuation, each word has no prefix, and each sentence has a label in the form of "negative" or "positive".
+
+The purpose of this analysis is to classify community sentences or comments about the Indonesian government's plan to move the capital from Jakarta to Kalimantan. Does the sentence agree or disagree with the government's plan?
+
+
+# Libraries
+
+```{r message=FALSE}
+library(rsample)
+library(dplyr)
+library(tm)
+```
+
+# Read Data
+
+```{r}
+kota <- read.csv("data_input/kota_score22 - Copy.csv", stringsAsFactors = FALSE, encoding = "UTF-8")
+
+kota %<>% 
+  select("label" = sentiment, "text" = text) %>% 
+  mutate("label" = as.factor(label)) 
+
+head(kota,10)
+
+prop.table(table(kota$label))
+```
+
+# Convert Text to Corpus
+
+A corpus is a set of machine-readable texts. A text corpus can be classified into various categories by the source of the content, metadata, the presence of multimedia or its relation to other corpora
+
+```{r}
+kota.corpus <- VCorpus(VectorSource(kota$text))
+class(kota.corpus)
+
+kota.corpus[[1]]
+
+kota.corpus[[1]]$content
+```
+
+# DocumentTermMatrix
+
+DocumentTermMatrix  functions to parse corpus data into a matrix, making a matrix of each word that contains the frequency data of each sentence.
+```{r}
+kota.dtm <- DocumentTermMatrix(kota.corpus)
+kota.dtm
+
+inspect(kota.dtm)
+```
+
+# Cross-validation
+
+First, let split the train-test for the predictor only.
+```{r}
+set.seed(100)
+index<-sample(1:nrow(kota.dtm),0.75*nrow(kota.dtm))
+# Split sms_dtm in 75-25 ratio, store it in 'sms_train' and 'sms_test'.
+kota_train<-kota.dtm[index,]
+kota_test<-kota.dtm[-index,]
+```
+
+Then, Split the label from 'kota' dataset.
+Store the label in 'train_label' and 'test_label'
+
+```{r}
+train_label<- kota[index,1]
+test_label<- kota[-index,1]
+```
+
+From here, we will use terms that appear in at least 4 documents.
+All terms that appear in at least 4 documents. 
+
+```{r}
+kota_freq <- findFreqTerms(kota.dtm, 4)
+length(kota_freq)
+
+# Please subset the column of train-test dataset with just using column which column names are in sms_freq.
+
+kota_train<-kota_train[,kota_freq]
+kota_test<-kota_test[,kota_freq]
+```
+
+# Convert to 0 or 1
+
+Before the modeling part, we need to change all elements of matrix with just 1 or 0 (1 if the corresponding term appears in the document, and 0 otherwise). 
+
+```{r}
+bernoulli_conv <- function(x){
+  x <- as.factor(as.numeric(x>0))
+}
+
+# Check your function here (using 'sapply')
+counts <- c(3,0,0,1,4,0)
+
+sapply(counts,FUN = bernoulli_conv)
+```
+
+Again, please transform the train-test dataset using `bernoulli_conv` function. 
+
+```{r}
+# Margin=1 (by row), margin=2 (by column) 
+train_bn <- apply(kota_train, 2, bernoulli_conv)
+test_bn <- apply(kota_test, 2, bernoulli_conv)
+```
+
+At this point, please make sure that this train_bn and test_bn are both 'sparse matrix'.
+
+```{r}
+head(train_bn,1)
+```
+
+Conclusion:
+Because the dominant matrix element is 0, "Laplace smoothing" must be done
+
+# Modeling
+
+Create Naive-Bayes Classifier here, using laplace=1
+
+```{r}
+library(e1071)
+# Create your model here.
+kota_model<-naiveBayes(x=train_bn,y=train_label,laplace=1)
+predict <- predict(kota_model,test_bn,type="class")
+```
+
+# Confusion Matrix
+
+```{r}
+# Create a confusion matrix here.
+caret::confusionMatrix(data=predict,
+                       reference=test_label,
+                       dnn=c("Prediksi","Aktual"),
+                       positive="negative")
+```
+
+In the Confusion Matrix above, it can be seen that the accuracy of the Naive Bayes model is 80.28%.
+Recall or Sensitivity is 75.86%, and the value of Precision (Pos Pred Value) is 75.86%.
